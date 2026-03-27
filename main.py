@@ -1,8 +1,12 @@
-import gensim
-import numpy as np
 import time
-import gensim.downloader as api
 import requests
+import torch
+from transformers import BertTokenizer, BertModel
+
+DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('bert-base-uncased')
+model = model.to(DEVICE)
 
 def get_correct_wiki_url(search_term):
     api_url = "https://en.wikipedia.org/w/api.php"
@@ -12,7 +16,7 @@ def get_correct_wiki_url(search_term):
     params = {
         "action": "query",
         "titles": search_term,
-        "redirects": 1,         # <--- This is the magic key that follows redirects
+        "redirects": 1,
         "format": "json",
         "prop": "info",
         "inprop": "url"
@@ -39,35 +43,29 @@ def get_correct_wiki_url(search_term):
         print(f"An error occurred: {e}")
         return None
 
-model = gensim.models.KeyedVectors.load("google_w2v.model")
 from bs import LinkGenerator
 generator = LinkGenerator()
-word2index = model.key_to_index
 
-while True:
-    start_word = input("Enter the start word : ").lower()
-    if start_word in word2index:
-        break
-    print("That word doesnt exist in the vocabulary, please try again")
-
-while True:
-    end_word = input("Enter the end word : ").lower()
-    if end_word in word2index:
-        break
-    print("That word doesnt exist in the vocabulary, please try again")
+start_word = input("Enter the start word : ").lower()
+end_word = input("Enter the end word : ").lower()
 
 start = get_correct_wiki_url(start_word)
 end = get_correct_wiki_url(end_word)
 
-LIMIT = 10
+LIMIT = 30
+
+end_inputs = tokenizer(end_word, return_tensors="pt").to(DEVICE)
+with torch.no_grad():
+    outputs = model(**end_inputs)
+end_vector = outputs.last_hidden_state[0, 1, :]
 
 print(f"Starting point {start_word}:{start}")
 currLink = start
 currName = start_word
 
-end_vector = model[end_word]
-
 status = True
+
+visited = set()
 for i in range(LIMIT):
     if currName == end_word or currLink == end:
         print(f"Found the end point {end_word}:{end}")
@@ -75,18 +73,28 @@ for i in range(LIMIT):
         break
     nextLinks = generator.connections(currLink)
     time.sleep(1)
-    currVector = model[currName]
+
+    curr_inputs = tokenizer(currName, return_tensors="pt").to(DEVICE)
+    with torch.no_grad():
+        outputs = model(**curr_inputs)
+    currVector = outputs.last_hidden_state[0, 1, :]
     norm = 2*1e9
+
     smallest_name = None
     correspoding_link = None
+
     for name, link in nextLinks.items():
         name = name.lower()
-        if name in word2index:
-            nextVec = model[name]
-        else:
+        if name in visited:
             continue
+        visited.add(name)
+        next_inputs = tokenizer(name, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            outputs = model(**next_inputs)
+        nextVec = outputs.last_hidden_state[0, 1, :]
 
-        new_norm = np.linalg.norm(nextVec - end_vector)
+        new_norm = torch.linalg.norm(nextVec - end_vector)
+        new_norm = new_norm.item()
         if new_norm < norm:
             norm = new_norm
             smallest_name = name
@@ -97,4 +105,4 @@ for i in range(LIMIT):
     print(f"{i+1} => {currName}:{currLink}")
 
 if status:
-    print("Target word not found within 10 steps")
+    print("Target word not found within 30 steps")

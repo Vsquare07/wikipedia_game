@@ -8,5 +8,3 @@ wheels/
 
 # Virtual environments
 .venv
-google_w2v.model
-google_w2v.model.vectors.npy
