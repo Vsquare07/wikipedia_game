@@ -1,6 +1,7 @@
 import torch
 from transformers import BertTokenizer, BertModel
 
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
 
 class BERT():
