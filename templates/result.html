@@ -4,111 +4,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikifinder</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-
-    <style>
-        /* Updated your custom block to look a bit more modern using Bootstrap-like colors */
-        .block {
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem;
-            margin: 15px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-        }
-    </style>
+    <title>Wikifinder — Results</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="static/result_css.css">
 </head>
 
 <body>
 
-    <div class="container mt-4">
-        <h2>Wikifinder</h2>
+    <div class="bg-grid"></div>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <nav>
+        <span class="nav-brand"><a href="/" class="active">Wikifinder</a></span>
+    </nav>
 
-        <p><b>Start:</b> {{ start_word }}</p>
-        <p><b>End:</b> {{ end_word }}</p>
+    <div class="page">
 
-        <button class="btn btn-danger" onclick="stopStream()">Stop</button>
-        <form action="/restart" method="POST" style="display:inline;">
-            <button type="submit" class="btn btn-primary">Restart</button>
-        </form>
+        <div class="header-panel">
+            <h2 class="page-title">Path Results</h2>
+            <div class="meta-row">
+                <div class="meta-item">
+                    <span class="meta-label">Origin</span>
+                    <span class="meta-value">{{ start_word }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Target</span>
+                    <span class="meta-value">{{ end_word }}</span>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="btn btn-stop" onclick="stopStream()">⬛ Stop Stream</button>
+                <form action="/restart" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-restart">↺ New Search</button>
+                </form>
+            </div>
+        </div>
 
-        <hr class="my-4">
-
-        <div id="container"></div>
+        <div id="container">
+            <div class="skeleton-wrap">
+                <div class="skel"></div>
+                <div class="skel" style="height:56px;opacity:0.7;animation-delay:0.15s"></div>
+                <div class="skel" style="height:56px;opacity:0.4;animation-delay:0.3s"></div>
+            </div>
+        </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-        crossorigin="anonymous"></script>
 
     <script>
         const container = document.getElementById("container");
-
-        const skeletonDiv = document.createElement('div');
-        skeletonDiv.innerHTML = `
-            <p class="placeholder-glow">
-                <span class="placeholder col-12 bg-secondary">&nbsp;</span>
-            </p>
-            <p class="placeholder-wave">
-                <span class="placeholder col-12 bg-secondary">&nbsp;</span>
-            </p>
-        `;
-        container.appendChild(skeletonDiv);
-
         let eventSource = new EventSource(`/stream`);
         let count = 1;
 
-        eventSource.onmessage = function(event){
+        // Remove skeleton once first real block arrives
+        let skeletonRemoved = false;
+        function removeSkeleton() {
+            if (!skeletonRemoved) {
+                const sk = container.querySelector('.skeleton-wrap');
+                if (sk) sk.remove();
+                skeletonRemoved = true;
+            }
+        }
+
+        eventSource.onmessage = function (event) {
             const data = JSON.parse(event.data);
             let word = data.word;
             let url = data.url;
+            if (!word && !url) return;
 
-            if(word && url){
-                const div = document.createElement("div");
-                div.className = "block";
+            removeSkeleton();
 
-                let isFinished = false;
+            const div = document.createElement("div");
+            div.className = "block";
 
-                if(word == "__found__"){
-                    div.innerHTML = `<p class="mb-0 text-success"><b>Target word found ✅</b></p>`;
-                    isFinished = true;
-                }
-                else if(word == "__NOTfound__"){
-                    div.innerHTML = `<p class="mb-0 text-danger"><b>Target word not found in the limit of 20 steps ❌</b></p>`;
-                    isFinished = true;
-                }
-                else {
-                    div.innerHTML = `
-                        <p class="mb-1 fw-bold">${count}: ${word}</p>
-                        <p class="mb-0"><a href="${url}" target="_blank" class="text-decoration-none">${url}</a></p>
-                    `;
-                }
-
-                container.insertBefore(div, skeletonDiv);
-                count += 1;
-
-                if(isFinished){
-                    stopStream();
-                }
+            if (word === "__found__") {
+                div.classList.add("block-found");
+                div.innerHTML = `<p class="status-text">✅ TARGET REACHED — Path complete</p>`;
+                stopStream();
+            } else if (word === "__NOTfound__") {
+                div.classList.add("block-notfound");
+                div.innerHTML = `<p class="status-text">✖ NOT FOUND — Limit of 20 steps exceeded</p>`;
+                stopStream();
+            } else {
+                div.innerHTML = `
+                    <span class="block-num">${String(count).padStart(2, '0')}</span>
+                    <p class="block-word">${word}</p>
+                    <p class="block-url"><a href="${url}" target="_blank">${url}</a></p>
+                `;
+                count++;
             }
 
-            window.scrollTo(0, document.body.scrollHeight);
+            // Stagger animation delay per block
+            div.style.animationDelay = `${Math.min((count - 1) * 0.04, 0.3)}s`;
+            container.appendChild(div);
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         };
 
-        eventSource.onerror = function(err){
+        eventSource.onerror = function (err) {
             console.error("SSE error:", err);
             stopStream();
         };
 
-        function stopStream(){
-            if(eventSource){
-                eventSource.close();
-            }
-            if(skeletonDiv.parentNode){
-                skeletonDiv.remove();
-            }
+        function stopStream() {
+            if (eventSource) { eventSource.close(); eventSource = null; }
+            removeSkeleton();
+            const div = document.createElement("div");
+            div.className = "block";
+            div.classList.add("block-stopped");
+            div.innerHTML = `<p class="status-text">🟨Search stopped</p>`;
+            container.appendChild(div);
         }
     </script>
 

@@ -1,4 +1,3 @@
-
 import torch
 from transformers import BertTokenizer, BertModel
 
@@ -18,7 +17,7 @@ class BERT():
         return outputs.last_hidden_state[0, 1, :]
     
     def cos_sim(self, v1:torch.Tensor, v2:torch.Tensor) -> int:
-        """Calculate cos_sim of the vector joining v1 and v2"""
+        """Calculate cosine_similarity of the vector joining v1 and v2"""
         return (torch.nn.functional.cosine_similarity(v1, v2, dim=0)).item()
     
 if __name__ == "__main__":
